@@ -1,0 +1,73 @@
+import os
+import subprocess
+import logging
+from datetime import datetime
+
+# -------------------------------
+# 1️⃣ Configure Logging
+# -------------------------------
+log_dir = "logs"
+os.makedirs(log_dir, exist_ok=True)
+log_file = os.path.join(log_dir, f"pipeline_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+
+logging.basicConfig(
+    filename=log_file,
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
+# Console handler for real-time feedback
+console = logging.StreamHandler()
+console.setLevel(logging.INFO)
+formatter = logging.Formatter("%(levelname)s - %(message)s")
+console.setFormatter(formatter)
+logging.getLogger().addHandler(console)
+
+
+# -------------------------------
+# 2️⃣ Define Helper Function
+# -------------------------------
+def run_command(cmd, step_name):
+    """Run shell command and handle errors with logging."""
+    logging.info(f"Starting step: {step_name}")
+    logging.info(f"Command: {cmd}")
+    try:
+        subprocess.run(cmd, shell=True, check=True)
+        logging.info(f"✅ {step_name} completed successfully.\n")
+    except subprocess.CalledProcessError as e:
+        logging.error(f"❌ {step_name} failed with error code {e.returncode}.")
+        logging.error(f"Command output: {e}")
+        raise RuntimeError(f"{step_name} failed. See log for details.")
+
+
+# -------------------------------
+# 3️⃣ Define Pipeline Steps
+# -------------------------------
+def run_pipeline(input_fastq, reference_genome, output_dir):
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Step 1: Run FastQC
+    fastqc_cmd = f"fastqc {input_fastq} -o {output_dir}"
+    run_command(fastqc_cmd, "Quality Control (FastQC)")
+
+    # Step 2: Run BWA-MEM2 alignment
+    aligned_sam = os.path.join(output_dir, "aligned_reads.sam")
+    bwa_cmd = f"bwa-mem2 mem {reference_genome} {input_fastq} > {aligned_sam}"
+    run_command(bwa_cmd, "Read Alignment (BWA-MEM2)")
+
+    logging.info("🎉 Pipeline completed successfully.")
+
+
+# -------------------------------
+# 4️⃣ Execute Pipeline
+# -------------------------------
+if __name__ == "__main__":
+    try:
+        run_pipeline(
+            input_fastq="data/sample_R1.fastq",
+            reference_genome="ref/genome.fasta",
+            output_dir="output"
+        )
+    except Exception as e:
+        logging.critical(f"Pipeline terminated due to a critical error: {e}")
+        exit(1)
