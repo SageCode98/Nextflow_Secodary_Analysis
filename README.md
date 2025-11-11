@@ -43,24 +43,7 @@ logging
 
 (Note: The built-in logging module is part of the Python standard library, so no installation is required.)
 
-📂 Directory Structure
-project_root/
-│
-├── data/
-│   └── sample_R1.fastq              # Input FASTQ file
-│
-├── ref/
-│   └── genome.fasta                 # Reference genome
-│
-├── output/
-│   ├── fastqc_report.html
-│   └── aligned_reads.sam
-│
-├── logs/
-│   └── pipeline_log_20251110_145230.log
-│
-├── pipeline.py                      # Main pipeline script
-└── README.md                        # This file
+
 
 🚀 Usage
 
