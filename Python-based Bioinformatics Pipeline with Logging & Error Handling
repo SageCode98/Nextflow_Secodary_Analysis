@@ -43,15 +43,55 @@ def run_command(cmd, step_name):
 # -------------------------------
 # 3️⃣ Define Pipeline Steps
 # -------------------------------
-def run_pipeline(input_fastq, reference_genome, output_dir):
-    os.makedirs(output_dir, exist_ok=True)
+def run_trimmomatic_pipeline(fastq_dir="/workspaces/Nextflow_Secodary_Analysis/DataSets/sra-toolkit-downloader/data/fastq"):
+    """Run Trimmomatic on paired-end reads."""
+    trim_dir = os.path.join(fastq_dir, "trimmed")
+    os.makedirs(trim_dir, exist_ok=True)
 
-    # Step 1: Run FastQC
-    fastqc_cmd = f"fastqc {input_fastq} -o {output_dir}"
-    run_command(fastqc_cmd, "Quality Control (FastQC)")
+    # Locate Trimmomatic jar
+    trimmomatic_jar = subprocess.getoutput("dirname $(which trimmomatic)") + "/../share/trimmomatic/trimmomatic.jar"
+    adapters = os.path.dirname(trimmomatic_jar) + "/adapters/TruSeq3-PE.fa"
 
-    # Step 2: Run BWA-MEM2 alignment
-    aligned_sam = os.path.join(output_dir, "aligned_reads.sam")
+    # Trimming parameters
+    slidingwindow = "4:20"
+    minlen = "50"
+
+    # Process FASTQ files
+    for file in os.listdir(fastq_dir):
+        if file.endswith("_1.fastq"):
+            sample = file.replace("_1.fastq", "")
+            fwd = os.path.join(fastq_dir, f"{sample}_1.fastq")
+            rev = os.path.join(fastq_dir, f"{sample}_2.fastq")
+
+            out_fwd = os.path.join(trim_dir, f"{sample}_1_paired.fastq")
+            out_fwd_unpaired = os.path.join(trim_dir, f"{sample}_1_unpaired.fastq")
+            out_rev = os.path.join(trim_dir, f"{sample}_2_paired.fastq")
+            out_rev_unpaired = os.path.join(trim_dir, f"{sample}_2_unpaired.fastq")
+
+            cmd = [
+                "java", "-jar", trimmomatic_jar, "PE", "-threads", "4",
+                fwd, rev,
+                out_fwd, out_fwd_unpaired,
+                out_rev, out_rev_unpaired,
+                f"ILLUMINACLIP:{adapters}:2:30:10",
+                f"SLIDINGWINDOW:{slidingwindow}",
+                f"MINLEN:{minlen}"
+            ]
+
+            logging.info(f"Running Trimmomatic for sample: {sample}")
+            subprocess.run(cmd, check=True)
+            logging.info(f"Finished trimming sample: {sample}")
+
+    logging.info("✅ All Trimmomatic steps completed successfully.\n")
+    return trim_dir  # return the trimmed directory for downstream steps
+
+
+def run_pipeline(input_fastq, reference_genome, trim_dir):
+    """Run downstream analysis after trimming."""
+    os.makedirs(trim_dir, exist_ok=True)
+
+    # Example: Run BWA-MEM2 alignment
+    aligned_sam = os.path.join(trim_dir, "aligned_reads.sam")
     bwa_cmd = f"bwa-mem2 mem {reference_genome} {input_fastq} > {aligned_sam}"
     run_command(bwa_cmd, "Read Alignment (BWA-MEM2)")
 
@@ -59,15 +99,31 @@ def run_pipeline(input_fastq, reference_genome, output_dir):
 
 
 # -------------------------------
-# 4️⃣ Execute Pipeline
+# 4️⃣ Execute Pipeline (Main)
 # -------------------------------
 if __name__ == "__main__":
+    FASTQ_DIR = "/workspaces/Nextflow_Secodary_Analysis/DataSets/sra-toolkit-downloader/data/fastq"
+    REF_GENOME = "/workspaces/Nextflow_Secodary_Analysis/DataSets/sra-toolkit-downloader/data/ncbi_dataset/data/GCF_000002415.2/plasmodium_vivax.fasta"
+
     try:
+        logging.info("===================================")
+        logging.info("🔬 Starting Bioinformatics Pipeline")
+        logging.info("===================================")
+
+        # Step 1: Run Trimmomatic
+        trim_output_dir = run_trimmomatic_pipeline(FASTQ_DIR)
+
+        # Step 2: Run alignment pipeline
         run_pipeline(
-            input_fastq="data/sample_R1.fastq",
-            reference_genome="ref/genome.fasta",
-            output_dir="output"
+            input_fastq=trim_output_dir,
+            reference_genome=REF_GENOME,
+            trim_dir=trim_output_dir
         )
+
+        logging.info("✅ All steps completed successfully!")
+        logging.info("===================================")
+
     except Exception as e:
         logging.critical(f"Pipeline terminated due to a critical error: {e}")
         exit(1)
+
