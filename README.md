@@ -20,7 +20,7 @@ This repository provides a simple bioinformatics pipeline for performing read qu
 
 🧰 Requirements
 
-Ensure the following tools and libraries are installed in your environment:
+Ensure the following tools and libraries are installed in your environment of choice i.e. conda or docker;
 
 System Tools
 
