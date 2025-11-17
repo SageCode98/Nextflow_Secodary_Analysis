@@ -4,11 +4,24 @@ import logging
 from datetime import datetime
 
 # -------------------------------
-# 1️⃣ Configure Logging
+# 1️⃣ Configure Dynamic Directories
 # -------------------------------
-log_dir = "logs"
+
+# Use the user's home directory for stable, cross-platform paths
+HOME = os.path.expanduser("~")
+
+# Create a cache folder for the pipeline
+BASE_PIPELINE_DIR = os.path.join(HOME, ".bio_pipeline")
+os.makedirs(BASE_PIPELINE_DIR, exist_ok=True)
+
+# Logs folder inside pipeline directory
+log_dir = os.path.join(BASE_PIPELINE_DIR, "logs")
 os.makedirs(log_dir, exist_ok=True)
-log_file = os.path.join(log_dir, f"pipeline_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+
+log_file = os.path.join(
+    log_dir,
+    f"pipeline_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+)
 
 logging.basicConfig(
     filename=log_file,
@@ -16,7 +29,7 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-# Console handler for real-time feedback
+# Console handler for real-time logging
 console = logging.StreamHandler()
 console.setLevel(logging.INFO)
 formatter = logging.Formatter("%(levelname)s - %(message)s")
@@ -25,41 +38,55 @@ logging.getLogger().addHandler(console)
 
 
 # -------------------------------
-# 2️⃣ Define Helper Function
+# 2️⃣ Helper Function to Run Commands
 # -------------------------------
 def run_command(cmd, step_name):
-    """Run shell command and handle errors with logging."""
+    """Run shell commands with logging and error handling."""
     logging.info(f"Starting step: {step_name}")
     logging.info(f"Command: {cmd}")
+
     try:
         subprocess.run(cmd, shell=True, check=True)
         logging.info(f"✅ {step_name} completed successfully.\n")
     except subprocess.CalledProcessError as e:
-        logging.error(f"❌ {step_name} failed with error code {e.returncode}.")
-        logging.error(f"Command output: {e}")
+        logging.error(f"❌ {step_name} failed with error code {e.returncode}")
+        logging.error(str(e))
         raise RuntimeError(f"{step_name} failed. See log for details.")
 
 
 # -------------------------------
-# 3️⃣ Define Pipeline Steps
+# 3️⃣ Trimmomatic Pipeline (Dynamic Paths)
 # -------------------------------
-def run_trimmomatic_pipeline(fastq_dir="/workspaces/Nextflow_Secodary_Analysis/DataSets/sra-toolkit-downloader/data/fastq"):
-    """Run Trimmomatic on paired-end reads."""
+def run_trimmomatic_pipeline(fastq_dir):
+    """Run Trimmomatic on paired-end reads dynamically."""
+
     trim_dir = os.path.join(fastq_dir, "trimmed")
     os.makedirs(trim_dir, exist_ok=True)
 
-    # Locate Trimmomatic jar
-    trimmomatic_jar = subprocess.getoutput("dirname $(which trimmomatic)") + "/../share/trimmomatic/trimmomatic.jar"
-    adapters = os.path.dirname(trimmomatic_jar) + "/adapters/TruSeq3-PE.fa"
+    # Dynamically locate Trimmomatic
+    trimmomatic_path = subprocess.getoutput("which trimmomatic")
 
-    # Trimming parameters
+    if not trimmomatic_path:
+        raise FileNotFoundError("Trimmomatic not found in environment PATH")
+
+    trimmomatic_jar = os.path.join(
+        os.path.dirname(os.path.dirname(trimmomatic_path)),
+        "share/trimmomatic/trimmomatic.jar"
+    )
+
+    adapters = os.path.join(
+        os.path.dirname(trimmomatic_jar),
+        "adapters",
+        "TruSeq3-PE.fa"
+    )
+
     slidingwindow = "4:20"
     minlen = "50"
 
-    # Process FASTQ files
     for file in os.listdir(fastq_dir):
         if file.endswith("_1.fastq"):
             sample = file.replace("_1.fastq", "")
+
             fwd = os.path.join(fastq_dir, f"{sample}_1.fastq")
             rev = os.path.join(fastq_dir, f"{sample}_2.fastq")
 
@@ -82,38 +109,50 @@ def run_trimmomatic_pipeline(fastq_dir="/workspaces/Nextflow_Secodary_Analysis/D
             subprocess.run(cmd, check=True)
             logging.info(f"Finished trimming sample: {sample}")
 
-    logging.info("✅ All Trimmomatic steps completed successfully.\n")
-    return trim_dir  # return the trimmed directory for downstream steps
+    logging.info("✅ All Trimmomatic steps completed.\n")
+    return trim_dir
 
 
+# -------------------------------
+# 4️⃣ Downstream Pipeline
+# -------------------------------
 def run_pipeline(input_fastq, reference_genome, trim_dir):
-    """Run downstream analysis after trimming."""
+    """Run alignment and other downstream steps."""
     os.makedirs(trim_dir, exist_ok=True)
 
-    # Example: Run BWA-MEM2 alignment
     aligned_sam = os.path.join(trim_dir, "aligned_reads.sam")
     bwa_cmd = f"bwa-mem2 mem {reference_genome} {input_fastq} > {aligned_sam}"
+
     run_command(bwa_cmd, "Read Alignment (BWA-MEM2)")
 
     logging.info("🎉 Pipeline completed successfully.")
 
 
 # -------------------------------
-# 4️⃣ Execute Pipeline (Main)
+# 5️⃣ Main Execution (Dynamic Paths)
 # -------------------------------
 if __name__ == "__main__":
-    FASTQ_DIR = "/workspaces/Nextflow_Secodary_Analysis/DataSets/sra-toolkit-downloader/data/fastq"
-    REF_GENOME = "/workspaces/Nextflow_Secodary_Analysis/DataSets/sra-toolkit-downloader/data/ncbi_dataset/data/GCF_000002415.2/plasmodium_vivax.fasta"
+
+    # User-configurable DATA directory under home
+    DATA_DIR = os.path.join(HOME, "bio_data")
+    os.makedirs(DATA_DIR, exist_ok=True)
+
+    FASTQ_DIR = os.path.join(DATA_DIR, "fastq")
+    REF_DIR = os.path.join(DATA_DIR, "reference")
+
+    os.makedirs(FASTQ_DIR, exist_ok=True)
+    os.makedirs(REF_DIR, exist_ok=True)
+
+    # User places FASTQ and reference genome in these folders
+    REF_GENOME = os.path.join(REF_DIR, "reference.fasta")
 
     try:
         logging.info("===================================")
         logging.info("🔬 Starting Bioinformatics Pipeline")
         logging.info("===================================")
 
-        # Step 1: Run Trimmomatic
         trim_output_dir = run_trimmomatic_pipeline(FASTQ_DIR)
 
-        # Step 2: Run alignment pipeline
         run_pipeline(
             input_fastq=trim_output_dir,
             reference_genome=REF_GENOME,
@@ -126,4 +165,5 @@ if __name__ == "__main__":
     except Exception as e:
         logging.critical(f"Pipeline terminated due to a critical error: {e}")
         exit(1)
+
 
