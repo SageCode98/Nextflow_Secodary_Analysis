@@ -1,4 +1,14 @@
 📂 Directory Structure
+#Bash code to create clean directory structure, best practice
+#mkdir -p project/{config,scripts,data/{raw/fastq,reference,metadata},results/{fastqc,trimmed,aligned,logs},docs} 
+#touch project/{README.md,environment.yml,run_pipeline.py}
+
+#If you want to create it in your current diretory:
+#mkdir -p ./project/{config,scripts,data/{raw/fastq,reference,metadata},results/{fastqc,trimmed,aligned,logs},docs} \
+  && touch ./project/{README.md,environment.yml,run_pipeline.py}
+
+
+
 ├── DataSets
 │   └── sra-toolkit-downloader
 │       ├── DataSets
