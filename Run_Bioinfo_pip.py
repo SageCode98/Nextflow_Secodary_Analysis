@@ -116,16 +116,31 @@ def run_trimmomatic_pipeline(fastq_dir):
 # -------------------------------
 # 4️⃣ Downstream Pipeline
 # -------------------------------
-def run_pipeline(input_fastq, reference_genome, trim_dir):
-    """Run alignment and other downstream steps."""
-    os.makedirs(trim_dir, exist_ok=True)
+def run_pipeline(trim_dir, reference_genome):
 
-    aligned_sam = os.path.join(trim_dir, "aligned_reads.sam")
-    bwa_cmd = f"bwa-mem2 mem {reference_genome} {input_fastq} > {aligned_sam}"
+    # Collect paired trimmed FASTQ files only
+    paired = sorted([f for f in os.listdir(trim_dir) if f.endswith("_paired.fastq")])
 
-    run_command(bwa_cmd, "Read Alignment (BWA-MEM2)")
+    samples = {}
 
-    logging.info("🎉 Pipeline completed successfully.")
+    # Group files by sample name
+    for f in paired:
+        sample = f.replace("_1_paired.fastq","").replace("_2_paired.fastq","")
+        samples.setdefault(sample, []).append(f)
+
+    for sample, files in samples.items():
+        try:
+            fwd = os.path.join(trim_dir, [f for f in files if "_1_paired.fastq" in f][0])
+            rev = os.path.join(trim_dir, [f for f in files if "_2_paired.fastq" in f][0])
+        except IndexError:
+            logging.error(f"Missing paired trimmed files for sample {sample}. Skipping.")
+            continue
+
+        output_sam = os.path.join(trim_dir, f"{sample}.sam")
+
+        bwa_cmd = f"bwa-mem2 mem {reference_genome} {fwd} {rev} > {output_sam}"
+        run_command(bwa_cmd, f"BWA alignment for sample {sample}")
+
 
 
 # -------------------------------
@@ -154,7 +169,7 @@ if __name__ == "__main__":
         trim_output_dir = run_trimmomatic_pipeline(FASTQ_DIR)
 
         run_pipeline(
-            input_fastq=trim_output_dir,
+            #input_fastq=trim_output_dir,
             reference_genome=REF_GENOME,
             trim_dir=trim_output_dir
         )
