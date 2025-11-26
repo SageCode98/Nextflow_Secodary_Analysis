@@ -1,4 +1,4 @@
-# Nextflow_Secodary_Analysis
+# Secodary_Analysis_pipeline 
 🧬 Bioinformatics QC & Alignment Pipeline
 Overview
 
