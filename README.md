@@ -1,5 +1,5 @@
 # Secodary_Analysis_pipeline 
-🧬 Bioinformatics QC & Alignment Pipeline
+🧬 QC & Alignment Pipeline
 Overview
 
 This repository provides a simple bioinformatics pipeline for performing read quality control (Trimmomatic) and sequence alignment (BWA-MEM2) with integrated logging and error handling.
